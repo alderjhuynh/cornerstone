@@ -12,6 +12,7 @@ public class CornerstoneClient implements ClientModInitializer {
     public void onInitializeClient() {
         SaveStore.load();
         SelectionManager.register();
+        SelectionRenderer.register();
         CommandQueueRunner.register();
         AsyncRegionSaver.register();
         CornerstoneCommands.register();
