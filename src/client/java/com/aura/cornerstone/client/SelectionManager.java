@@ -66,4 +66,12 @@ public final class SelectionManager {
     public static Optional<BlockPos> second() {
         return Optional.ofNullable(second);
     }
+
+    public static void setFirst(BlockPos pos) {
+        first = pos.immutable();
+    }
+
+    public static void setSecond(BlockPos pos) {
+        second = pos.immutable();
+    }
 }

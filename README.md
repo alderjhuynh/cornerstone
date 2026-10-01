@@ -24,6 +24,8 @@ While selection mode is on, left and right clicks only pick corners.
 | Command | What it does |
 | --- | --- |
 | `/cornerstone select` | Turns selection mode on or off. Your corners are kept when it is off. |
+| `/cornerstone pos1 <x> <y> <z>` | Sets the first corner directly, no clicking or travel needed. |
+| `/cornerstone pos2 <x> <y> <z>` | Sets the second corner directly, no clicking or travel needed. |
 | `/cornerstone clear` | Forgets both corners. |
 | `/cornerstone save <name>` | Saves the selected area. Air blocks are skipped. |
 | `/cornerstone save <name> air` | Saves the selected area including air, so running it also clears space. |
@@ -44,7 +46,7 @@ The same file has a `commandsPerTick` setting (default 5). It controls how many 
 
 - You need operator permissions to run a save, since it uses `setblock` and `fill`.
 - The whole area must be in loaded chunks when you save. Stand close to it first.
-- Areas are limited to 1,000,000 blocks.
+- Areas are unlimited in size, but large regions come with a disclaimer: saving scans every block and may freeze the game briefly, saves get very big, and running sends ~100 commands/second by default so big builds take a long time and may get you kicked for spam. Prefer smaller saves when you can.
 - Only block states are saved. Chest contents, sign text, and other block entity data are not.
 - Blocks are placed from the bottom up, but things that need support (torches, sand, and similar) can still fall or pop off while a build is in progress.
 - Command feedback from `setblock` and `fill` is hidden from chat during a run, and a progress message appears above your hotbar.

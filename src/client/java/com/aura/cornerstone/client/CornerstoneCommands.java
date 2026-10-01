@@ -29,6 +29,16 @@ public final class CornerstoneCommands {
                 dispatcher.register(literal("cornerstone")
                         .then(literal("select").executes(CornerstoneCommands::toggleSelect))
                         .then(literal("clear").executes(CornerstoneCommands::clearSelection))
+                        .then(literal("pos1")
+                                .then(argument("x", IntegerArgumentType.integer())
+                                        .then(argument("y", IntegerArgumentType.integer())
+                                                .then(argument("z", IntegerArgumentType.integer())
+                                                        .executes(ctx -> setCorner(ctx, true))))))
+                        .then(literal("pos2")
+                                .then(argument("x", IntegerArgumentType.integer())
+                                        .then(argument("y", IntegerArgumentType.integer())
+                                                .then(argument("z", IntegerArgumentType.integer())
+                                                        .executes(ctx -> setCorner(ctx, false))))))
                         .then(literal("save")
                                 .then(argument("name", StringArgumentType.word())
                                         .executes(ctx -> save(ctx, false))
@@ -69,6 +79,33 @@ public final class CornerstoneCommands {
         return 1;
     }
 
+    private static int setCorner(CommandContext<FabricClientCommandSource> ctx, boolean first) {
+        BlockPos pos = new BlockPos(
+                IntegerArgumentType.getInteger(ctx, "x"),
+                IntegerArgumentType.getInteger(ctx, "y"),
+                IntegerArgumentType.getInteger(ctx, "z"));
+        if (first) {
+            SelectionManager.setFirst(pos);
+        } else {
+            SelectionManager.setSecond(pos);
+        }
+        String msg = (first ? "Corner 1 set: " : "Corner 2 set: ") + pos.toShortString();
+        Optional<BlockPos> other = first ? SelectionManager.second() : SelectionManager.first();
+        if (other.isPresent()) {
+            BlockPos a = pos;
+            BlockPos b = other.get();
+            long volume = (long) (Math.abs(a.getX() - b.getX()) + 1)
+                    * (Math.abs(a.getY() - b.getY()) + 1)
+                    * (Math.abs(a.getZ() - b.getZ()) + 1);
+            msg += " (" + volume + " blocks)";
+            if (volume > 1_000_000) {
+                msg += " large region: saving may freeze briefly.";
+            }
+        }
+        ctx.getSource().sendFeedback(Component.literal(msg));
+        return 1;
+    }
+
     private static int save(CommandContext<FabricClientCommandSource> ctx, boolean includeAir) {
         FabricClientCommandSource source = ctx.getSource();
         String name = StringArgumentType.getString(ctx, "name");
@@ -80,35 +117,23 @@ public final class CornerstoneCommands {
             return 0;
         }
 
-        RegionConverter.Result result;
+        if (AsyncRegionSaver.isBusy()) {
+            source.sendError(Component.literal("A save is already in progress. Wait or run /cornerstone cancel."));
+            return 0;
+        }
+
         try {
-            result = RegionConverter.convert(source.getLevel(), a.get(), b.get(), includeAir);
+            if (!AsyncRegionSaver.start(name, source.getLevel(), a.get(), b.get(), includeAir)) {
+                source.sendError(Component.literal("A save is already in progress."));
+                return 0;
+            }
         } catch (IllegalArgumentException e) {
             source.sendError(Component.literal(e.getMessage()));
             return 0;
         }
 
-        SavedRegion region = new SavedRegion();
-        region.originX = result.min().getX();
-        region.originY = result.min().getY();
-        region.originZ = result.min().getZ();
-        region.sizeX = result.sizeX();
-        region.sizeY = result.sizeY();
-        region.sizeZ = result.sizeZ();
-        region.commands = result.commands();
-
-        if (!SaveStore.put(name, region)) {
-            source.sendError(Component.literal("Could not write the save file"));
-            return 0;
-        }
-
-        String msg = "Saved '" + name + "': " + result.sizeX() + "x" + result.sizeY() + "x" + result.sizeZ()
-                + " region as " + result.commands().size() + " commands.";
-        if (result.skipped() > 0) {
-            msg += " (" + result.skipped() + " skipped: command too long)";
-        }
-        source.sendFeedback(Component.literal(msg));
-        return result.commands().size();
+        source.sendFeedback(Component.literal("Saving '" + name + "' in the background."));
+        return 1;
     }
 
      private static int run(CommandContext<FabricClientCommandSource> ctx, BlockPos originOverride) {
@@ -173,7 +198,17 @@ public final class CornerstoneCommands {
     }
 
     private static int cancel(CommandContext<FabricClientCommandSource> ctx) {
+        int saveCancelled = AsyncRegionSaver.cancel();
         int dropped = CommandQueueRunner.cancel();
+        if (saveCancelled > 0 && dropped == 0) {
+            ctx.getSource().sendFeedback(Component.literal("Save cancelled."));
+            return 1;
+        }
+        if (saveCancelled > 0) {
+            ctx.getSource().sendFeedback(
+                    Component.literal("Save cancelled; " + dropped + " run commands dropped."));
+            return dropped + 1;
+        }
         ctx.getSource().sendFeedback(Component.literal("Cancelled; " + dropped + " commands dropped."));
         return dropped;
     }
